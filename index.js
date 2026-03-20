@@ -1,48 +1,40 @@
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
+const express = require('express'); // Usaremos esto para ver el QR como imagen
+const app = express();
+const port = process.env.PORT || 3000;
+
+let qrImagen = '';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
+client.on('qr', async (qr) => {
+    // En lugar de dibujar, generamos una imagen real
+    qrImagen = await qrcode.toDataURL(qr);
+    console.log('--- QR GENERADO: Entra al link de abajo para verlo ---');
+});
+
+// Creamos una página web simple para ver el QR
+app.get('/', (req, res) => {
+    if (qrImagen) {
+        res.send(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;"><img src="${qrImagen}" style="width:300px;height:300px;"></body></html>`);
+    } else {
+        res.send('<h1>Generando QR... espera 10 segundos y recarga</h1>');
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Servidor listo en el puerto ${port}`);
+});
+
 const MI_GRUPO_DESTINO = "Team Codigo Dragon"; 
-
-client.on('qr', qr => {
-    // Esto dibuja el QR en los Logs de Railway
-    qrcode.generate(qr, {small: true, margin: 2});
-    console.log('--- ¡QR LISTO ABAJO! ---');
-});
-
-client.on('ready', () => {
-    console.log('¡BOT ACTIVADO CON ÉXITO EN EL GRUPO!');
-});
-
-client.on('message', async msg => {
-    try {
-        const chat = await msg.getChat();
-        if (chat.isGroup && chat.name !== MI_GRUPO_DESTINO) {
-            const todosLosChats = await client.getChats();
-            const miGrupo = todosLosChats.find(c => c.name === MI_GRUPO_DESTINO);
-            if (miGrupo && msg.body) {
-                const hora = new Date().toLocaleTimeString();
-                const reporte = `🚨 *REPORTE EXTERNO*\n🕒 ${hora}\n👥 *De:* ${chat.name}\n\n${msg.body}`;
-                await client.sendMessage(miGrupo.id._serialized, reporte);
-            }
-        }
-    } catch (e) { console.log("Error al procesar: ", e); }
-});
-
+client.on('ready', () => { console.log('¡BOT CONECTADO!'); });
+// ... (resto del código de reenvío que ya tienes)
 client.initialize();
