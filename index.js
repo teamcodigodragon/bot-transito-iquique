@@ -22,7 +22,7 @@ const MI_GRUPO_DESTINO = "Team Codigo Dragon";
 
 client.on('qr', qr => {
     // Esto dibuja el QR en los Logs de Railway
-    qrcode.generate(qr, {small: true});
+    qrcode.generate(qr, {small: true, margin: 2});
     console.log('--- ¡QR LISTO ABAJO! ---');
 });
 
