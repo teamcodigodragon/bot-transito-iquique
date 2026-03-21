@@ -1,64 +1,72 @@
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
 
-// Servidor básico para que Railway no apague el bot
-app.get('/', (req, res) => res.send('🛡️ Estado del Bot: Buscando Conexión y Generando IDs...'));
-app.listen(port, '0.0.0.0');
+app.get('/', (req, res) => res.send('🚀 Bot de Reenvío: CONECTADO'));
+app.listen(process.env.PORT || 3000);
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox', 
-            '--disable-dev-shm-usage', 
-            '--disable-accelerated-2d-canvas', 
-            '--no-first-run', 
-            '--no-zygote', 
-            '--single-process', 
-            '--disable-gpu'
-        ]
+    puppeteer: { 
+        headless: true, 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
     }
 });
 
-// EVENTO 1: CONFIRMACIÓN DE CONEXIÓN
-client.on('ready', () => {
-    console.log('------------------------------------------------');
-    console.log('✅ ¡CONEXIÓN EXITOSA! EL BOT ESTÁ ESCUCHANDO');
-    console.log('------------------------------------------------');
+// PUNTEROS DE GRUPOS ORIGEN
+const FUENTES = ["URBAN", "CONTROL", "PDI", "CARABINEROS", "RUTAS", "IQQ"];
+const DESTINO_NOMBRE = "Team Codigo Dragon";
+
+client.on('ready', async () => {
+    console.log('✅ CONEXIÓN EXITOSA');
+    // Te envía un mensaje a ti mismo para avisar que despertó
+    await client.sendMessage(client.info.wid._serialized, "🤖 *Bot Activado:* Estoy listo para filtrar mensajes.");
 });
 
-// EVENTO 2: CAPTURA DE TODO MOVIMIENTO (PARA OBTENER EL @g.us)
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
         
-        // ESTO APARECERÁ EN TUS LOGS DE RAILWAY CADA VEZ QUE PASE ALGO
-        console.log(`📩 NUEVO DATO -> Grupo: "${chat.name}" | ID: ${chat.id._serialized}`);
-
-        // COMANDO DE RESCATE: Si escribes LISTA en cualquier chat
-        if (msg.body.toUpperCase() === 'LISTA') {
-            const chats = await client.getChats();
-            const grupos = chats.filter(c => c.isGroup);
+        if (chat.isGroup) {
+            const nombreUpper = chat.name.toUpperCase();
             
-            let txt = "📋 *TUS GRUPOS Y SUS IDs:*\n\n";
-            grupos.forEach(g => {
-                txt += `👥 *Nombre:* ${g.name}\n🆔 *ID:* ${g.id._serialized}\n\n`;
-            });
+            // 1. ¿Viene de un grupo autorizado?
+            const esFuente = FUENTES.some(f => nombreUpper.includes(f));
+            
+            // 2. ¿Es el destino? (Para no reenviarse a sí mismo)
+            const esDestino = nombreUpper.includes(DESTINO_NOMBRE.toUpperCase());
 
-            await client.sendMessage(msg.from, txt);
-            console.log("✅ Lista enviada exitosamente a WhatsApp.");
+            if (esFuente && !esDestino) {
+                const chats = await client.getChats();
+                const grupoDestino = chats.find(c => c.name && c.name.includes(DESTINO_NOMBRE));
+
+                if (grupoDestino && msg.body) {
+                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                    const texto = `🚨 *NUEVO REPORTE*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`;
+                    
+                    await client.sendMessage(grupoDestino.id._serialized, texto);
+                    console.log(`✅ Copiado de ${chat.name} a ${DESTINO_NOMBRE}`);
+                }
+            }
         }
-    } catch (err) {
-        console.log("Error en el motor de escucha:", err);
+
+        // COMANDO DE AUXILIO
+        if (msg.fromMe && msg.body.toUpperCase() === 'LISTA') {
+            const chats = await client.getChats();
+            let lista = "*IDs de tus grupos:*\n\n";
+            chats.filter(c => c.isGroup).forEach(g => {
+                lista += `• ${g.name}: ${g.id._serialized}\n`;
+            });
+            await client.sendMessage(msg.to, lista);
+        }
+
+    } catch (e) {
+        console.log("Error:", e);
     }
 });
 
 client.initialize();
+
 
 
 
