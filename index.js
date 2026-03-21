@@ -1,50 +1,30 @@
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- CONFIGURACIÓN PERSONALIZADA ---
-// Reemplaza el número de abajo con el tuyo (Formato: CodigoPais + Numero sin el +)
-// Ejemplo para Chile: "56912345678"
-const MI_TELEFONO = "56940440806"
-
+// --- CONFIGURACIÓN DE GRUPOS (EXTRACCIÓN EXACTA) ---
 const GRUPOS_PERMITIDOS = [
-    "🕹️𝐔𝐑𝐁𝐀𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋𝐄𝐒•𝟐𝟒/𝟕🚨🚔", 
+    "🕹️𝐔𝐑𝐁𝐀𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋𝐄𝐒•𝟐𝟒/𝟕🚨🚔",
     "CONTROL - IQUIQUE - HOSPICIO",
     "CONTROL PDI Y CARABINEROS",
+    "RUTAS IQUIQUE ALTO HOSPICIO\npozo Almonte pueblos del interior y aeropuerto",
     "Controles iqq - hospicio"
 ];
+
 const MI_GRUPO_DESTINO = "Team Codigo Dragon";
 
-let pairingCode = "GENERANDO CÓDIGO... ESPERA 30 SEGUNDOS";
-
-// --- INTERFAZ WEB PARA VER EL CÓDIGO ---
+// Servidor para mantener vivo el servicio en Railway
 app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head><title>Panel Control Team Dragon</title></head>
-            <body style="background:#111; color:#eee; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0;">
-                <h1 style="color:#25D366;">Vinculación por Número</h1>
-                <p>Ingresa este código en tu WhatsApp:</p>
-                <div style="background:#222; padding:30px; border:3px dashed #25D366; border-radius:15px; font-size:4rem; font-weight:bold; letter-spacing:8px; color:#fff;">
-                    ${pairingCode}
-                </div>
-                <div style="margin-top:30px; text-align:center; max-width:400px; color:#aaa;">
-                    <p>1. Ve a WhatsApp > Dispositivos vinculados</p>
-                    <p>2. Vincular un dispositivo > <b>Vincular con el número de teléfono</b></p>
-                    <p>3. Escribe el código de arriba.</p>
-                </div>
-                <script>setTimeout(() => { location.reload(); }, 15000);</script>
-            </body>
-        </html>
-    `);
+    res.send('<html><body style="background:#000;color:#25D366;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;"><h1>🚀 Team Codigo Dragon Online</h1></body></html>');
 });
 
 app.listen(port, '0.0.0.0', () => {
-    console.log(`Servidor en puerto ${port}`);
+    console.log(`Servidor activo en puerto ${port}`);
 });
 
-// --- LÓGICA DEL BOT ---
+// Configuración del Cliente con Estrategia de Persistencia
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -53,46 +33,53 @@ const client = new Client({
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            '--single-process'
         ]
     }
 });
 
-// ESTO REEMPLAZA AL QR: PIDE EL CÓDIGO DE 8 DÍGITOS
-client.on('qr', async () => {
-    try {
-        console.log("Solicitando código de vinculación para:", MI_TELEFONO);
-        const code = await client.requestPairingCode(MI_TELEFONO);
-        pairingCode = code;
-        console.log(">>> CÓDIGO DE VINCULACIÓN:", code);
-    } catch (err) {
-        console.error("Error al pedir código:", err);
-        pairingCode = "ERROR: REINICIA RAILWAY";
-    }
-});
-
 client.on('ready', () => {
-    pairingCode = "¡BOT CONECTADO!";
-    console.log('--- EL BOT ESTÁ ONLINE Y ESCUCHANDO ---');
+    console.log('--- ✅ BOT VINCULADO Y ESCUCHANDO REPORTES ---');
 });
 
-client.on('message', async msg => {
+// Lógica de Reenvío Forzado (Usa message_create para no perder nada)
+client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
-        // Solo reenvía si es grupo y está en la lista blanca
-        if (chat.isGroup && GRUPOS_PERMITIDOS.includes(chat.name)) {
-            const todosLosChats = await client.getChats();
-            const miGrupo = todosLosChats.find(c => c.name === MI_GRUPO_DESTINO);
-            
-            if (miGrupo && msg.body) {
-                const reporte = `🚨 *REPORTE REENVIADO*\n🕒 ${new Date().toLocaleTimeString()}\n📍 *Fuente:* ${chat.name}\n\n${msg.body}`;
-                await client.sendMessage(miGrupo.id._serialized, reporte);
-                console.log(`Reporte enviado desde ${chat.name}`);
+        
+        if (chat.isGroup) {
+            const nombreGrupoActual = chat.name ? chat.name.trim() : "";
+
+            // Verificamos si el mensaje viene de uno de los grupos de la lista
+            if (GRUPOS_PERMITIDOS.includes(nombreGrupoActual)) {
+                
+                // Evitar que el bot se reenvíe a sí mismo si escribe en el destino
+                if (msg.fromMe && nombreGrupoActual === MI_GRUPO_DESTINO) return;
+
+                // Buscamos el grupo de destino (Team Codigo Dragon)
+                const todosLosChats = await client.getChats();
+                const miGrupoDestino = todosLosChats.find(c => c.name === MI_GRUPO_DESTINO);
+
+                if (miGrupoDestino && msg.body) {
+                    const ahora = new Date();
+                    const horaFormateada = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                    
+                    const reporte = `🚨 *REPORTE REENVIADO*\n🕒 ${horaFormateada}\n📍 *Fuente:* ${nombreGrupoActual}\n\n${msg.body}`;
+                    
+                    await client.sendMessage(miGrupoDestino.id._serialized, reporte);
+                    console.log(`✅ COPIADO con éxito desde: ${nombreGrupoActual}`);
+                }
             }
         }
-    } catch (e) {
-        console.log("Error al procesar mensaje:", e);
+    } catch (error) {
+        console.log("Error al procesar mensaje:", error);
     }
+});
+
+// Manejo de desconexión para evitar que el bot se muera
+client.on('disconnected', (reason) => {
+    console.log('Bot desconectado:', reason);
+    client.initialize();
 });
 
 client.initialize();
