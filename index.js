@@ -4,8 +4,8 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- CONFIGURACIÓN DE GRUPOS (EXTRACCIÓN EXACTA) ---
-const GRUPOS_PERMITIDOS = [
+// --- CONFIGURACIÓN DE GRUPOS ---
+const GRUPOS_FUENTES = [
     "🕹️𝐔𝐑𝐁𝐀𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋𝐄𝐒•𝟐𝟒/𝟕🚨🚔",
     "CONTROL - IQUIQUE - HOSPICIO",
     "CONTROL PDI Y CARABINEROS",
@@ -13,73 +13,62 @@ const GRUPOS_PERMITIDOS = [
     "Controles iqq - hospicio"
 ];
 
-const MI_GRUPO_DESTINO = "Team Codigo Dragon";
+const GRUPO_DESTINO_NOMBRE = "Team Codigo Dragon";
 
-// Servidor para mantener vivo el servicio en Railway
 app.get('/', (req, res) => {
-    res.send('<html><body style="background:#000;color:#25D366;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;"><h1>🚀 Team Codigo Dragon Online</h1></body></html>');
+    res.send('<html><body style="background:#000;color:#25D366;text-align:center;padding-top:50px;font-family:sans-serif;"><h1>🚀 Team Codigo Dragon: ONLINE</h1><p>Revisa los Logs en Railway para ver la actividad.</p></body></html>');
 });
 
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Servidor activo en puerto ${port}`);
-});
+app.listen(port, '0.0.0.0');
 
-// Configuración del Cliente con Estrategia de Persistencia
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--single-process'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     }
 });
 
 client.on('ready', () => {
-    console.log('--- ✅ BOT VINCULADO Y ESCUCHANDO REPORTES ---');
+    console.log('------------------------------------------------');
+    console.log('✅ BOT CONECTADO - ESCUCHANDO GRUPOS DE IQUIQUE');
+    console.log('------------------------------------------------');
 });
 
-// Lógica de Reenvío Forzado (Usa message_create para no perder nada)
+// ESTA FUNCIÓN ES LA QUE HACE TODO EL TRABAJO
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
         
         if (chat.isGroup) {
-            const nombreGrupoActual = chat.name ? chat.name.trim() : "";
+            const nombreLimpio = chat.name ? chat.name.trim() : "";
+            const idGrupo = chat.id._serialized;
 
-            // Verificamos si el mensaje viene de uno de los grupos de la lista
-            if (GRUPOS_PERMITIDOS.includes(nombreGrupoActual)) {
-                
-                // Evitar que el bot se reenvíe a sí mismo si escribe en el destino
-                if (msg.fromMe && nombreGrupoActual === MI_GRUPO_DESTINO) return;
+            // LOG DE DEPURACIÓN (Míralo en Railway para obtener los IDs)
+            console.log(`[MENSAJE DETECTADO] Grupo: "${nombreLimpio}" | ID: ${idGrupo}`);
 
-                // Buscamos el grupo de destino (Team Codigo Dragon)
+            // 1. Verificamos si el nombre coincide con nuestra lista
+            const esFuente = GRUPOS_FUENTES.some(g => g.trim() === nombreLimpio);
+
+            if (esFuente) {
+                // Evitar auto-reenvío si el bot escribe en el destino
+                if (msg.fromMe && nombreLimpio === GRUPO_DESTINO_NOMBRE) return;
+
                 const todosLosChats = await client.getChats();
-                const miGrupoDestino = todosLosChats.find(c => c.name === MI_GRUPO_DESTINO);
+                const destino = todosLosChats.find(c => c.name === GRUPO_DESTINO_NOMBRE);
 
-                if (miGrupoDestino && msg.body) {
-                    const ahora = new Date();
-                    const horaFormateada = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                if (destino && msg.body) {
+                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                    const cuerpoReporte = `🚨 *REPORTE REENVIADO*\n🕒 ${hora}\n📍 *Fuente:* ${nombreLimpio}\n\n${msg.body}`;
                     
-                    const reporte = `🚨 *REPORTE REENVIADO*\n🕒 ${horaFormateada}\n📍 *Fuente:* ${nombreGrupoActual}\n\n${msg.body}`;
-                    
-                    await client.sendMessage(miGrupoDestino.id._serialized, reporte);
-                    console.log(`✅ COPIADO con éxito desde: ${nombreGrupoActual}`);
+                    await client.sendMessage(destino.id._serialized, cuerpoReporte);
+                    console.log(`>>> ✅ COPIADO EXITOSAMENTE AL TEAM DRAGON`);
                 }
             }
         }
-    } catch (error) {
-        console.log("Error al procesar mensaje:", error);
+    } catch (err) {
+        console.error("Error procesando mensaje:", err);
     }
-});
-
-// Manejo de desconexión para evitar que el bot se muera
-client.on('disconnected', (reason) => {
-    console.log('Bot desconectado:', reason);
-    client.initialize();
 });
 
 client.initialize();
