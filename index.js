@@ -4,42 +4,57 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configuración básica del servidor para Railway
-app.get('/', (req, res) => res.send('🚀 Bot de Rescate de IDs: ACTIVO. Escribe "LISTA" en tu WhatsApp.'));
+// Servidor básico para que Railway no apague el bot
+app.get('/', (req, res) => res.send('🛡️ Estado del Bot: Buscando Conexión y Generando IDs...'));
 app.listen(port, '0.0.0.0');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage', 
+            '--disable-accelerated-2d-canvas', 
+            '--no-first-run', 
+            '--no-zygote', 
+            '--single-process', 
+            '--disable-gpu'
+        ]
     }
 });
 
+// EVENTO 1: CONFIRMACIÓN DE CONEXIÓN
 client.on('ready', () => {
-    console.log('--- ✅ BOT EN LÍNEA ---');
+    console.log('------------------------------------------------');
+    console.log('✅ ¡CONEXIÓN EXITOSA! EL BOT ESTÁ ESCUCHANDO');
+    console.log('------------------------------------------------');
 });
 
-// ESTE ES EL COMANDO QUE TE DARÁ LOS IDS EN TU CELULAR
+// EVENTO 2: CAPTURA DE TODO MOVIMIENTO (PARA OBTENER EL @g.us)
 client.on('message_create', async (msg) => {
     try {
-        // Solo responde si TÚ escribes la palabra exacta "LISTA"
+        const chat = await msg.getChat();
+        
+        // ESTO APARECERÁ EN TUS LOGS DE RAILWAY CADA VEZ QUE PASE ALGO
+        console.log(`📩 NUEVO DATO -> Grupo: "${chat.name}" | ID: ${chat.id._serialized}`);
+
+        // COMANDO DE RESCATE: Si escribes LISTA en cualquier chat
         if (msg.body.toUpperCase() === 'LISTA') {
             const chats = await client.getChats();
             const grupos = chats.filter(c => c.isGroup);
             
-            let reporteIds = "📋 *LISTA DE GRUPOS Y SUS IDs:*\n\n";
-            
+            let txt = "📋 *TUS GRUPOS Y SUS IDs:*\n\n";
             grupos.forEach(g => {
-                reporteIds += `👥 *Nombre:* ${g.name}\n🆔 *ID:* ${g.id._serialized}\n\n`;
+                txt += `👥 *Nombre:* ${g.name}\n🆔 *ID:* ${g.id._serialized}\n\n`;
             });
 
-            // El bot te envía la lista directamente a tu chat
-            await client.sendMessage(msg.from, reporteIds);
-            console.log("✅ Lista de IDs enviada a tu WhatsApp.");
+            await client.sendMessage(msg.from, txt);
+            console.log("✅ Lista enviada exitosamente a WhatsApp.");
         }
-    } catch (error) {
-        console.log("Error al generar la lista:", error);
+    } catch (err) {
+        console.log("Error en el motor de escucha:", err);
     }
 });
 
