@@ -1,61 +1,73 @@
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// PUNTEROS DE FRACCIÓN (Basta que el nombre CONTENGA esto)
-const PUNTEROS = ["URBAN", "CONTROL", "PDI", "CARABINEROS", "RUTAS", "iqq"];
-const DESTINO = "Team Codigo Dragon";
+// --- CONFIGURACIÓN DE SEGURIDAD Y FILTROS ---
+const PUNTEROS_ORIGEN = ["URBAN", "CONTROL", "PDI", "CARABINEROS", "RUTAS", "IQQ"];
+const NOMBRE_DESTINO_FIJO = "Team Codigo Dragon";
 
-app.get('/', (req, res) => res.send('Ejecutando Reenvío por Punteros...'));
+app.get('/', (req, res) => res.send('🛡️ Sistema de Replicación Team Codigo Dragon: ACTIVO'));
 app.listen(port, '0.0.0.0');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
-    bypassCSP: true,
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     }
 });
 
-client.on('ready', () => {
-    console.log('--- 🚀 BOT EN LÍNEA: TEAM CODIGO DRAGON ---');
+client.on('ready', async () => {
+    console.log('------------------------------------------------');
+    console.log('✅ BOT CONECTADO Y ESCUCHANDO EN IQUIQUE');
+    console.log('------------------------------------------------');
+    
+    // Forzamos una carga de todos los chats para que el bot "vea" el destino
+    const chats = await client.getChats();
+    const destinoEncontrado = chats.find(c => c.name && c.name.includes(NOMBRE_DESTINO_FIJO));
+    
+    if (destinoEncontrado) {
+        console.log(`📍 DESTINO DETECTADO: ${destinoEncontrado.name}`);
+        console.log(`🆔 ID DEL DESTINO: ${destinoEncontrado.id._serialized}`);
+    } else {
+        console.log('⚠️ ADVERTENCIA: No veo el grupo "Team Codigo Dragon" en la lista inicial.');
+    }
 });
 
-// USAMOS 'message_create' PARA QUE LEA TAMBIÉN TUS PROPIOS POSTS
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
-        
-        if (chat.isGroup) {
-            const nombreDato = chat.name ? chat.name.toUpperCase() : "";
+        if (!chat.isGroup) return;
 
-            // ¿El nombre del grupo donde llegó el post tiene alguno de nuestros punteros?
-            const coincidePuntero = PUNTEROS.some(p => nombreDato.includes(p.toUpperCase()));
+        const nombreGrupo = chat.name ? chat.name.toUpperCase() : "";
+        const idGrupo = chat.id._serialized;
 
-            // Si coincide y NO es el grupo donde queremos copiar...
-            if (coincidePuntero && chat.name !== DESTINO) {
+        // LOG DE CUALQUIER ACTIVIDAD (Para que veas los IDs en Railway)
+        console.log(`[MOVIMIENTO] Grupo: "${chat.name}" | ID: ${idGrupo}`);
+
+        // 1. Verificamos si el mensaje viene de un origen autorizado (Punteros)
+        const esOrigenValido = PUNTEROS_ORIGEN.some(p => nombreGrupo.includes(p));
+
+        // 2. Si es origen y NO es el destino, intentamos la copia
+        if (esOrigenValido && !nombreGrupo.includes(NOMBRE_DESTINO_FIJO.toUpperCase())) {
+            
+            const todosLosChats = await client.getChats();
+            const grupoDestino = todosLosChats.find(c => 
+                c.name && c.name.trim().toUpperCase() === NOMBRE_DESTINO_FIJO.toUpperCase()
+            );
+
+            if (grupoDestino && msg.body) {
+                const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                const reporte = `🚨 *REPORTE REENVIADO*\n🕒 ${hora}\n📍 *Fuente:* ${chat.name}\n\n${msg.body}`;
                 
-                const todosLosChats = await client.getChats();
-                // Buscamos el grupo destino ignorando mayúsculas/minúsculas
-                const grupoDestino = todosLosChats.find(c => 
-                    c.name && c.name.trim().toUpperCase() === DESTINO.toUpperCase()
-                );
-
-                if (grupoDestino) {
-                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-                    const cuerpo = `🚨 *REPORTE DETECTADO*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`;
-                    
-                    await client.sendMessage(grupoDestino.id._serialized, cuerpo);
-                    console.log(`✅ COPIADO EXITOSO: De [${chat.name}] a [${DESTINO}]`);
-                } else {
-                    console.log(`❌ ERROR: No encuentro el grupo "${DESTINO}" en tu WhatsApp.`);
-                }
+                await client.sendMessage(grupoDestino.id._serialized, reporte);
+                console.log(`>>> ✅ COPIADO DESDE ${chat.name} HACIA EL DESTINO`);
             }
         }
-    } catch (e) {
-        console.log("Error en el proceso de puntero:", e);
+    } catch (error) {
+        console.log("Error en el motor de copia:", error);
     }
 });
 
