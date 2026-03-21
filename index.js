@@ -2,72 +2,59 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const app = express();
 
-// --- SERVIDOR PARA MANTENER RAILWAY VIVO ---
-app.get('/', (req, res) => res.send('🚀 Sistema Team Codigo Dragon: OPERATIVO'));
+app.get('/', (req, res) => res.send('🕵️ MONITOR DE TRÁFICO ACTIVO'));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './sesion_bot' }),
     puppeteer: { 
         headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
     }
 });
 
-// --- VARIABLES DE GRUPOS ---
-const t = "Team Codigo Dragon"; // Destino
+// DESTINO FINAL
+const t = "Team Codigo Dragon";
 
 client.on('ready', () => {
-    console.log('✅ BOT CONECTADO: Escaneando rutas de Iquique...');
+    console.log('🚀 BOT TOTALMENTE CONECTADO');
 });
 
+// ESTO MOSTRARÁ TODO EN LOS LOGS DE RAILWAY
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
-        if (!chat.isGroup) return;
-
-        // "N" es el nombre que el bot lee del grupo
-        const N = chat.name;
         
-        // NORMALIZACIÓN: Quitamos emojis y convertimos a mayúsculas para comparar fácil
-        const nLimpio = N.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-        
-        let idAsignado = "";
+        // LOG DE SEGURIDAD: Esto aparecerá en Railway cada vez que alguien escriba
+        console.log(`📩 MENSAJE RECIBIDO DE: "${chat.name}" | TEXTO: ${msg.body.substring(0, 20)}...`);
 
-        // --- LÓGICA DE COMPARATIVAS (Nomenclatura U1-C5) ---
-        if (nLimpio.includes("URBAN")) { idAsignado = "U1"; }
-        else if (nLimpio.includes("CONTROL") && nLimpio.includes("IQUIQUE")) { idAsignado = "C2"; }
-        else if (nLimpio.includes("PDI") || nLimpio.includes("CARABINEROS")) { idAsignado = "C3"; }
-        else if (nLimpio.includes("RUTAS")) { idAsignado = "R4"; }
-        else if (nLimpio.includes("CONTROLES IQQ")) { idAsignado = "C5"; }
-
-        // --- LA MAGIA: Si hay coincidencia y no es el grupo de destino ---
-        if (idAsignado !== "" && !nLimpio.includes(t.toUpperCase())) {
+        if (chat.isGroup) {
+            const N = chat.name.toUpperCase();
             
-            const todosLosChats = await client.getChats();
-            const grupoT = todosLosChats.find(c => c.name && c.name.includes(t));
+            // Filtro simplificado al máximo
+            const esFuente = N.includes("URBAN") || N.includes("CONTROL") || N.includes("PDI") || N.includes("RUTAS") || N.includes("IQQ");
+            const esDestino = N.includes(t.toUpperCase());
 
-            if (grupoT && msg.body) {
-                const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-                
-                const reporte = `🚨 *REPORTE [${idAsignado}]*\n🕒 *Hora:* ${hora}\n📍 *Origen:* ${N}\n\n${msg.body}`;
-                
-                await client.sendMessage(grupoT.id._serialized, reporte);
-                console.log(`✨ Magia: Replicado de ${idAsignado} a ${t}`);
+            if (esFuente && !esDestino) {
+                const todos = await client.getChats();
+                const destino = todos.find(c => c.name && c.name.toUpperCase().includes(t.toUpperCase()));
+
+                if (destino) {
+                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+                    await client.sendMessage(destino.id._serialized, `🚨 *REPORTE AUTOMÁTICO*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`);
+                    console.log(`✅ REPLICADO A ${t}`);
+                } else {
+                    console.log(`❌ ERROR: No encontré el grupo "${t}" en tu WhatsApp.`);
+                }
             }
         }
-
-        // --- COMANDO DE RESCATE (Solo para ti) ---
-        if (msg.body.toUpperCase() === 'LISTA') {
-            await client.sendMessage(msg.from, `🤖 Estoy activo. Leyendo: "${N}"`);
-        }
-
     } catch (e) {
-        console.log("Error en el escaneo:", e);
+        console.log("⚠️ ERROR CRÍTICO:", e);
     }
 });
 
 client.initialize();
+
 
 
 
