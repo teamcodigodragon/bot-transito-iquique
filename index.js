@@ -1,68 +1,71 @@
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
 const express = require('express');
 const app = express();
 
-let qrVisual = "";
-
-app.get('/', (req, res) => {
-    res.send(`
-        <div style="text-align:center;background:#1a1a1a;color:#fff;padding:40px;font-family:sans-serif;height:100vh;">
-            <h2 style="color:#00ff00;">🛡️ Activación LavoraTech / Team Codigo Dragon</h2>
-            <div style="background:#fff;padding:20px;display:inline-block;border-radius:15px;">
-                ${qrVisual ? `<img src="${qrVisual}" style="width:250px;" />` : "<h3>Generando QR... Refresca en unos segundos</h3>"}
-            </div>
-            <p style="margin-top:20px;">Escanea este código con tu WhatsApp para activar el reenvío.</p>
-            <p style="color:#888;font-size:12px;">Estado: Esperando vinculación...</p>
-        </div>
-    `);
-});
-
+// --- INFRAESTRUCTURA DE RED ---
+app.get('/', (req, res) => res.send('🚀 Sistema Team Codigo Dragon: ONLINE'));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({
-    // Cambiamos la ruta a una carpeta local del proyecto
-    authStrategy: new LocalAuth({ dataPath: './sesion_bot' }), 
+    authStrategy: new LocalAuth({ dataPath: './sesion_bot' }),
     puppeteer: { 
         headless: true, 
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
     }
 });
 
-const ORIGENES = ["URBAN", "CONTROL", "PDI", "CARABINEROS", "RUTAS", "IQQ"];
-const DESTINO_NOMBRE = "Team Codigo Dragon";
+// --- DEFINICIÓN DE GRUPOS (COMPARATIVAS) ---
+const U1 = "🕹️𝐔𝐑𝐁𝐀𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋𝐄𝐒•𝟐𝟒/𝟕🚨🚔";
+const C2 = "CONTROL - IQUIQUE - HOSPICIO";
+const C3 = "CONTROL PDI Y CARABINEROS";
+const R4 = "RUTAS IQUIQUE ALTO HOSPICIO\npozo Almonte pueblos del interior y aeropuerto";
+const C5 = "Controles iqq - hospicio";
 
-client.on('qr', (qr) => {
-    qrcode.toDataURL(qr, (err, url) => { qrVisual = url; });
-    console.log("⚠️ NUEVO QR GENERADO");
-});
+// Grupo Destino (Igualado a "t")
+const t = "Team Codigo Dragon";
 
 client.on('ready', () => {
-    qrVisual = "<h1 style='color:#00ff00;'>✅ BOT CONECTADO Y REPLICANDO</h1>";
-    console.log("✅ BOT LISTO PARA IQUIQUE");
+    console.log('✅ BOT VINCULADO Y ESCANEANDO GRUPOS');
 });
 
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
-        if (chat.isGroup) {
-            const nombre = chat.name.toUpperCase();
-            // Filtramos por palabras clave y evitamos que se reenvíe a sí mismo
-            if (ORIGENES.some(f => nombre.includes(f)) && !nombre.includes(DESTINO_NOMBRE.toUpperCase())) {
-                const chats = await client.getChats();
-                const target = chats.find(c => c.name && c.name.includes(DESTINO_NOMBRE));
+        if (!chat.isGroup) return;
+
+        const N = chat.name; // Nombre del grupo que envía el mensaje
+        let aliasFuente = "";
+
+        // --- LÓGICA DE COMPARATIVAS (N = ...) ---
+        if (N === U1) { aliasFuente = "U1"; }
+        else if (N === C2) { aliasFuente = "C2"; }
+        else if (N === C3) { aliasFuente = "C3"; }
+        else if (N === R4) { aliasFuente = "R4"; }
+        else if (N === C5) { aliasFuente = "C5"; }
+        else { return; } // Exit (Sigue escaneando)
+
+        // --- SI HAY MATCH, EJECUTAR MAGIA HACIA "t" ---
+        if (aliasFuente !== "" && msg.body) {
+            const todosLosChats = await client.getChats();
+            const grupoT = todosLosChats.find(c => c.name && c.name.includes(t));
+
+            if (grupoT) {
+                const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
                 
-                if (target && msg.body) {
-                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-                    await client.sendMessage(target.id._serialized, `🚨 *REPORTE DE RUTA*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`);
-                }
+                const reporte = `🚨 *REPORTE [${aliasFuente}]*\n🕒 *Hora:* ${hora}\n📍 *Fuente:* ${N}\n\n${msg.body}`;
+                
+                await client.sendMessage(grupoT.id._serialized, reporte);
+                console.log(`✨ Magia: Reenviado desde ${aliasFuente} a Team Codigo Dragon`);
             }
         }
-    } catch (e) { console.log("Error en reenvío:", e); }
+
+    } catch (e) {
+        console.log("Error en el cruce de datos:", e);
+    }
 });
 
 client.initialize();
+
 
 
 
