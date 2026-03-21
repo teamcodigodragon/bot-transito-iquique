@@ -7,20 +7,21 @@ const port = process.env.PORT || 3000;
 
 let qrImagen = '';
 
+// --- CONFIGURACIÓN DE GRUPOS ---
 const GRUPOS_PERMITIDOS = [
     "REPORTES RUTA A-16", 
     "CONTROL IQUIQUE",
     "Zello Iquique Oficial",
     "Avisos de Carabineros"
 ];
-
 const MI_GRUPO_DESTINO = "Team Codigo Dragon"; 
 
+// --- SERVIDOR WEB ---
 app.get('/', (req, res) => {
     if (qrImagen) {
         res.send(`<html><body style="background:#000;display:flex;justify-content:center;align-items:center;height:100vh;"><img src="${qrImagen}" style="border:10px solid white;width:300px;height:300px;"></body></html>`);
     } else {
-        res.send('<html><body style="background:#000;color:white;display:flex;justify-content:center;align-items:center;height:100vh;"><h1>Esperando QR... Recarga en 5 segundos</h1></body></html>');
+        res.send('<html><body style="background:#000;color:white;display:flex;justify-content:center;align-items:center;height:100vh;"><h1>Esperando el QR... recarga en 10 segundos</h1></body></html>');
     }
 });
 
@@ -28,6 +29,7 @@ app.listen(port, '0.0.0.0', () => {
     console.log(`Servidor activo en puerto ${port}`);
 });
 
+// --- EL AJUSTE MAESTRO ---
 const client = new Client({
     authStrategy: new LocalAuth(),
     webVersionCache: {
@@ -51,22 +53,15 @@ const client = new Client({
 
 client.on('qr', async (qr) => {
     qrImagen = await qrcode.toDataURL(qr);
-    console.log('--- NUEVO QR LISTO PARA ESCANEAR ---');
+    console.log('NUEVO QR GENERADO');
 });
 
 client.on('ready', () => {
     qrImagen = ''; 
-    console.log('¡CONEXIÓN EXITOSA! EL BOT YA ESTÁ LEYENDO MENSAJES');
+    console.log('¡BOT ONLINE!');
 });
 
-client.on('authenticated', () => {
-    console.log('--- AUTENTICADO CORRECTAMENTE ---');
-});
-
-client.on('auth_failure', msg => {
-    console.error('--- FALLO DE AUTENTICACIÓN ---', msg);
-});
-
+// Lógica de reenvío
 client.on('message', async msg => {
     try {
         const chat = await msg.getChat();
@@ -79,9 +74,7 @@ client.on('message', async msg => {
                 await client.sendMessage(miGrupo.id._serialized, reporte);
             }
         }
-    } catch (e) {
-        console.log("Error:", e);
-    }
+    } catch (e) { console.log("Error:", e); }
 });
 
 client.initialize();
