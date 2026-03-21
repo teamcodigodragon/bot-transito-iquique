@@ -1,24 +1,20 @@
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- CONFIGURACIÓN DE GRUPOS ---
-const GRUPOS_FUENTES = [
-    "🕹️𝐔𝐑𝐁𝐀𝐍 𝐂𝐎𝐍𝐓𝐑𝐎𝐋𝐄𝐒•𝟐𝟒/𝟕🚨🚔",
-    "CONTROL - IQUIQUE - HOSPICIO",
-    "CONTROL PDI Y CARABINEROS",
-    "RUTAS IQUIQUE ALTO HOSPICIO\npozo Almonte pueblos del interior y aeropuerto",
-    "Controles iqq - hospicio"
+// --- DEFINICIÓN DE PUNTEROS (FRACCIONES DE NOMBRES) ---
+const PUNTEROS_FUENTES = [
+    "URBAN", 
+    "CONTROL - IQUIQUE", 
+    "PDI Y CARABINEROS", 
+    "RUTAS IQUIQUE", 
+    "Controles iqq"
 ];
 
-const GRUPO_DESTINO_NOMBRE = "Team Codigo Dragon";
+const DESTINO_PUNTERO = "Team Codigo Dragon";
 
-app.get('/', (req, res) => {
-    res.send('<html><body style="background:#000;color:#25D366;text-align:center;padding-top:50px;font-family:sans-serif;"><h1>🚀 Team Codigo Dragon: ONLINE</h1><p>Revisa los Logs en Railway para ver la actividad.</p></body></html>');
-});
-
+app.get('/', (req, res) => res.send('Sistema de Punteros Activo'));
 app.listen(port, '0.0.0.0');
 
 const client = new Client({
@@ -30,48 +26,47 @@ const client = new Client({
 });
 
 client.on('ready', () => {
-    console.log('------------------------------------------------');
-    console.log('✅ BOT CONECTADO - ESCUCHANDO GRUPOS DE IQUIQUE');
-    console.log('------------------------------------------------');
+    console.log('--- 🚀 PROTOCOLO DE PUNTEROS INICIADO ---');
 });
 
-// ESTA FUNCIÓN ES LA QUE HACE TODO EL TRABAJO
 client.on('message_create', async (msg) => {
     try {
         const chat = await msg.getChat();
         
+        // Solo operamos si el dato proviene de un grupo
         if (chat.isGroup) {
-            const nombreLimpio = chat.name ? chat.name.trim() : "";
-            const idGrupo = chat.id._serialized;
+            const datoNombre = chat.name ? chat.name.toUpperCase() : "";
 
-            // LOG DE DEPURACIÓN (Míralo en Railway para obtener los IDs)
-            console.log(`[MENSAJE DETECTADO] Grupo: "${nombreLimpio}" | ID: ${idGrupo}`);
+            // LÓGICA DE COINCIDENCIA: ¿El puntero existe dentro del dato?
+            const coincidencia = PUNTEROS_FUENTES.find(puntero => 
+                datoNombre.includes(puntero.toUpperCase())
+            );
 
-            // 1. Verificamos si el nombre coincide con nuestra lista
-            const esFuente = GRUPOS_FUENTES.some(g => g.trim() === nombreLimpio);
-
-            if (esFuente) {
-                // Evitar auto-reenvío si el bot escribe en el destino
-                if (msg.fromMe && nombreLimpio === GRUPO_DESTINO_NOMBRE) return;
-
+            // Si hay coincidencia y NO es el grupo destino, procedemos
+            if (coincidencia && chat.name !== DESTINO_PUNTERO) {
+                
                 const todosLosChats = await client.getChats();
-                const destino = todosLosChats.find(c => c.name === GRUPO_DESTINO_NOMBRE);
+                // Puntero directo al grupo destino
+                const grupoDestino = todosLosChats.find(c => c.name === DESTINO_PUNTERO);
 
-                if (destino && msg.body) {
+                if (grupoDestino && msg.body) {
                     const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-                    const cuerpoReporte = `🚨 *REPORTE REENVIADO*\n🕒 ${hora}\n📍 *Fuente:* ${nombreLimpio}\n\n${msg.body}`;
                     
-                    await client.sendMessage(destino.id._serialized, cuerpoReporte);
-                    console.log(`>>> ✅ COPIADO EXITOSAMENTE AL TEAM DRAGON`);
+                    // Construcción del post replicado
+                    const postReplicado = `🚨 *REPORTE DETECTADO*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`;
+                    
+                    await client.sendMessage(grupoDestino.id._serialized, postReplicado);
+                    console.log(`✅ Puntero [${coincidencia}] encontró dato en: ${chat.name}`);
                 }
             }
         }
-    } catch (err) {
-        console.error("Error procesando mensaje:", err);
+    } catch (e) {
+        // Error controlado
     }
 });
 
 client.initialize();
+
 
 
 
