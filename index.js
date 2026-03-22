@@ -1,59 +1,66 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
 const app = express();
 
-app.get('/', (req, res) => res.send('🕵️ MONITOR DE TRÁFICO ACTIVO'));
+app.get('/', (req, res) => res.send('🚀 SISTEMA IQUIQUE V2: EN LINEA'));
 app.listen(process.env.PORT || 3000);
 
-const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './sesion_bot' }),
-    puppeteer: { 
-        headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-    }
-});
+async function conectarBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const sock = makeWASocket({
+        printQRInTerminal: true, // Esto hará que el QR salga en los LOGS de Railway
+        auth: state
+    });
 
-// DESTINO FINAL
-const t = "Team Codigo Dragon";
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('ready', () => {
-    console.log('🚀 BOT TOTALMENTE CONECTADO');
-});
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) {
+            console.log("⚠️ NUEVO QR GENERADO. COPIA ESTE CODIGO Y PEGALO EN UN GENERADOR DE QR:");
+            console.log(qr); // El código QR aparecerá como texto en los Logs
+        }
+        if (connection === 'close') {
+            const debeReconectar = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (debeReconectar) conectarBot();
+        } else if (connection === 'open') {
+            console.log('✅ BOT CONECTADO AL FIN (V2)');
+        }
+    });
 
-// ESTO MOSTRARÁ TODO EN LOS LOGS DE RAILWAY
-client.on('message_create', async (msg) => {
-    try {
-        const chat = await msg.getChat();
-        
-        // LOG DE SEGURIDAD: Esto aparecerá en Railway cada vez que alguien escriba
-        console.log(`📩 MENSAJE RECIBIDO DE: "${chat.name}" | TEXTO: ${msg.body.substring(0, 20)}...`);
+    // --- LÓGICA DE REENVÍO ---
+    sock.ev.on('messages.upsert', async m => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-        if (chat.isGroup) {
-            const N = chat.name.toUpperCase();
+        const idGrupo = msg.key.remoteJid;
+        const texto = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        if (idGrupo.endsWith('@g.us') && texto) {
+            // Buscamos el nombre del grupo (esto es más rápido con Baileys)
+            const metadata = await sock.groupMetadata(idGrupo);
+            const N = metadata.subject.toUpperCase();
+            const T = "Team Codigo Dragon";
+
+            const fuentes = ["URBAN", "CONTROL", "PDI", "RUTAS", "IQQ"];
             
-            // Filtro simplificado al máximo
-            const esFuente = N.includes("URBAN") || N.includes("CONTROL") || N.includes("PDI") || N.includes("RUTAS") || N.includes("IQQ");
-            const esDestino = N.includes(t.toUpperCase());
-
-            if (esFuente && !esDestino) {
-                const todos = await client.getChats();
-                const destino = todos.find(c => c.name && c.name.toUpperCase().includes(t.toUpperCase()));
+            if (fuentes.some(f => N.includes(f)) && !N.includes(T.toUpperCase())) {
+                const chats = await sock.groupFetchAllParticipating();
+                const destino = Object.values(chats).find(c => c.subject.includes(T));
 
                 if (destino) {
-                    const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-                    await client.sendMessage(destino.id._serialized, `🚨 *REPORTE AUTOMÁTICO*\n🕒 ${hora}\n📍 *Origen:* ${chat.name}\n\n${msg.body}`);
-                    console.log(`✅ REPLICADO A ${t}`);
-                } else {
-                    console.log(`❌ ERROR: No encontré el grupo "${t}" en tu WhatsApp.`);
+                    await sock.sendMessage(destino.id, { 
+                        text: `🚨 *REPORTE RUTA*\n📍 *Origen:* ${metadata.subject}\n\n${texto}` 
+                    });
+                    console.log(`✨ Replicado de ${metadata.subject} a ${T}`);
                 }
             }
         }
-    } catch (e) {
-        console.log("⚠️ ERROR CRÍTICO:", e);
-    }
-});
+    });
+}
 
-client.initialize();
+conectarBot();
 
 
 
